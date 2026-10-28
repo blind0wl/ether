@@ -125,10 +125,8 @@ export default function Setup() {
     api
       .getConfig()
       .then((c) => {
-        if (!c.usenet.providers?.length) c.usenet.providers = [blankProvider()];
-        if (!c.indexers?.length) c.indexers = [blankIndexer()];
         setCfg(c);
-        setPinDone(Boolean(c.plex.claimed && c.plex.token));
+        setPinDone(Boolean(c.plex.token));
         setLoadError(null);
       })
       .catch(setLoadError);
@@ -150,6 +148,27 @@ export default function Setup() {
     if (step === 3 && cfg) refreshDisk(cfg.cache.dir);
   }, [step, cfg?.cache.dir]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const claimServer = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      try {
+        await api.claim();
+        setClaimMsg("Server claimed to your Plex account.");
+      } catch (e) {
+        setClaimMsg(`Signed in, but claiming failed: ${(e as Error).message}`);
+      }
+      // PIN approval and claiming update the server, not the wizard's draft.
+      // Refresh only Plex so the next full-config save retains those credentials.
+      const { plex } = await api.getConfig();
+      setCfg((c) => (c ? { ...c, plex } : c));
+    } catch (e) {
+      setError(e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const startPin = async () => {
     setError(null);
     try {
@@ -162,14 +181,10 @@ export default function Setup() {
           const { done } = await api.pinPoll(p.id);
           if (!done) return;
           if (pollRef.current) window.clearInterval(pollRef.current);
+          setPin(null);
           setPinDone(true);
           setClaimMsg("Signed in. Claiming this server…");
-          try {
-            await api.claim();
-            setClaimMsg("Server claimed to your Plex account.");
-          } catch (e) {
-            setClaimMsg(`Signed in, but claiming failed: ${(e as Error).message}`);
-          }
+          await claimServer();
         } catch {
           /* keep polling */
         }
@@ -204,7 +219,7 @@ export default function Setup() {
     () =>
       cfg
         ? canAdvance(step, {
-            plexDone: pinDone || Boolean(cfg.plex.claimed && cfg.plex.token),
+            plexDone: Boolean(cfg.plex.claimed && cfg.plex.token),
             providers: cfg.usenet.providers ?? [],
             indexers: cfg.indexers ?? [],
             providerTests,
@@ -212,7 +227,7 @@ export default function Setup() {
             skipped,
           })
         : false,
-    [cfg, step, pinDone, providerTests, indexerTests, skipped],
+    [cfg, step, providerTests, indexerTests, skipped],
   );
 
   if (loadError && !cfg)
@@ -377,24 +392,15 @@ export default function Setup() {
               </p>
             </div>
           ) : !plexSigned ? (
-            <Button onClick={() => void startPin()}>Sign in to plex.tv</Button>
+            <Button disabled={saving} onClick={() => void startPin()}>
+              Sign in to plex.tv
+            </Button>
           ) : null}
           {claimMsg && !cfg.plex.claimed ? (
             <p className="text-sm text-fg-muted">{claimMsg}</p>
           ) : null}
           {plexSigned && !cfg.plex.claimed ? (
-            <Button
-              variant="outline"
-              onClick={async () => {
-                try {
-                  await api.claim();
-                  setPinDone(true);
-                  setClaimMsg("Server claimed.");
-                } catch (e) {
-                  setError(e);
-                }
-              }}
-            >
+            <Button variant="outline" disabled={saving} onClick={() => void claimServer()}>
               Claim server
             </Button>
           ) : null}
