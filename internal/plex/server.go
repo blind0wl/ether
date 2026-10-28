@@ -102,6 +102,8 @@ type Deps struct {
 
 	// Config returns the current settings snapshot.
 	Config func() config.Config
+	// OwnerSubscription returns the current entitlement snapshot from plex.tv.
+	OwnerSubscription func() (active bool, features []string)
 	// ImageURL builds TMDB image URLs; defaults to image.tmdb.org.
 	ImageURL core.ImageURLFunc
 	Logger   *slog.Logger
@@ -259,6 +261,9 @@ func (s *Server) cfg() config.Config { return s.d.Config() }
 // identity resolves the effective identity.
 func (s *Server) identity() Identity {
 	id := s.d.Identity
+	if s.d.OwnerSubscription != nil {
+		id.MyPlexSubscription, id.OwnerFeatures = s.d.OwnerSubscription()
+	}
 	c := s.cfg()
 	if id.MachineIdentifier == "" {
 		id.MachineIdentifier = c.Server.MachineIdentifier

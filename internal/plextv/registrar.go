@@ -63,6 +63,7 @@ type Status struct {
 	ResourceConnections []ResourceConnection `json:"resourceConnections,omitempty"`
 	PublicAddress       string               `json:"publicAddress,omitempty"` // as plex.tv sees us
 	PlexPass            bool                 `json:"plexPass"`                // owner subscription active
+	OwnerFeatures       []string             `json:"ownerFeatures"`           // granted by plex.tv
 
 	RemoteAccess bool                 `json:"remoteAccess"`
 	Reachability *remote.Reachability `json:"reachability,omitempty"`
@@ -376,6 +377,7 @@ func (r *Registrar) Status() Status {
 	st.Connections = slices.Clone(st.Connections)
 	st.PublishedURIs = slices.Clone(st.PublishedURIs)
 	st.ResourceConnections = slices.Clone(st.ResourceConnections)
+	st.OwnerFeatures = slices.Clone(st.OwnerFeatures)
 	st.UPnP = r.o.Mapper.Status()
 	if r.o.Certs != nil {
 		st.Cert = r.o.Certs.Info()
@@ -982,6 +984,7 @@ func (r *Registrar) Claim(ctx context.Context, userToken string) (*ClaimResult, 
 	}
 	r.mu.Lock()
 	r.st.PlexPass = res.Owner.Subscription.Active
+	r.st.OwnerFeatures = slices.Clone(res.Owner.Subscription.Features)
 	r.next[taskFriends] = time.Time{}
 	r.next[taskCert] = time.Time{}
 	r.mu.Unlock()
@@ -1003,6 +1006,8 @@ func (r *Registrar) Unclaim(ctx context.Context) error {
 	}
 	r.mu.Lock()
 	r.st.Listed = false
+	r.st.PlexPass = false
+	r.st.OwnerFeatures = nil
 	r.st.PublishedURIs = nil
 	r.st.ResourceConnections = nil
 	r.mu.Unlock()
@@ -1034,6 +1039,7 @@ func (r *Registrar) RefreshOwner(ctx context.Context) error {
 	}
 	r.mu.Lock()
 	r.st.PlexPass = pass
+	r.st.OwnerFeatures = slices.Clone(acct.Subscription.Features)
 	r.mu.Unlock()
 	if r.o.Users != nil {
 		return r.o.Users.SetOwner(ctx, *acct, cfg.Plex.Token)

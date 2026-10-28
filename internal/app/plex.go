@@ -30,8 +30,6 @@ func (a *App) buildPlex(cfg config.Config) (http.Handler, error) {
 		FriendlyName:      cfg.Server.FriendlyName,
 		Version:           plextv.DefaultServerVersion,
 		Platform:          plexPlatform(),
-		// Reported honestly: the owner's real subscription state.
-		MyPlexSubscription: a.registrar.Status().PlexPass,
 	}
 	hooks := plex.Hooks{
 		OnTimeline: func(u *core.User, key core.RatingKey, offset, duration time.Duration, state string) {
@@ -115,6 +113,10 @@ func (a *App) buildPlex(cfg config.Config) (http.Handler, error) {
 	deps.Config = a.cfg.Get
 	deps.Logger = a.log.With("component", "plex")
 	deps.Identity = identity
+	deps.OwnerSubscription = func() (bool, []string) {
+		st := a.registrar.Status()
+		return st.PlexPass, st.OwnerFeatures
+	}
 	deps.Hooks = hooks
 	if node := a.clusterNode(); node != nil && deps.DB != nil {
 		deps.Cluster = node
